@@ -21,16 +21,24 @@ def main():
         client = gd.get_client(token)
         acts = gd.fetch_activities(client, START, today)
         weights = gd.fetch_weights(client, START, today)
+        try:
+            daily = gd.fetch_daily_calories(client, START, today)
+        except Exception as err:  # noqa: BLE001
+            print("Daily calories unavailable:", err)
+            daily = None
     else:
         print("No GARMIN_TOKEN set, writing sample data.")
         acts, weights = gd.demo_data(START, today)
+        daily = None
 
     OUT.mkdir(exist_ok=True)
     acts = acts.sort_values("date")
-    acts.assign(date=acts.date.dt.strftime("%Y-%m-%d"), minutes=acts.minutes.round(1),
+    acts.assign(date=acts.date.dt.strftime("%Y-%m-%d"), minutes=acts.minutes.round(1), kcal=acts.kcal.round(),
                 km=acts.km.round(2)).to_csv(OUT / "activities.csv", index=False)
     weights.sort_values("date").assign(date=lambda d: d.date.dt.strftime("%Y-%m-%d"),
                                        kg=lambda d: d.kg.round(2)).to_csv(OUT / "weights.csv", index=False)
+    if daily is not None and len(daily):
+        daily.sort_values("date").assign(date=lambda d: d.date.dt.strftime("%Y-%m-%d")).to_csv(OUT / "daily_calories.csv", index=False)
     (OUT / "last_updated.txt").write_text(f"{today.isoformat()}\n")
     print(f"Saved {len(acts)} activities and {len(weights)} weigh-ins to data/.")
 
