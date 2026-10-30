@@ -39,9 +39,10 @@ def fetch_activities(client, start: date, end: date) -> pd.DataFrame:
                     "minutes": (act.get("duration") or 0) / 60,
                     "km": (act.get("distance") or 0) / 1000,
                     "vo2max": act.get("vO2MaxValue"),
+                    "kcal": act.get("calories"),
                 }
             )
-    df = pd.DataFrame(rows, columns=["date", "type", "minutes", "km", "vo2max"])
+    df = pd.DataFrame(rows, columns=["date", "type", "minutes", "km", "vo2max", "kcal"])
     df["is_run"] = df["type"].isin(RUN_TYPES)
     return df
 
@@ -57,6 +58,18 @@ def fetch_weights(client, start: date, end: date) -> pd.DataFrame:
             rows.append({"date": pd.to_datetime(day).normalize(), "kg": w["weight"] / 1000})
     df = pd.DataFrame(rows, columns=["date", "kg"])
     return df.groupby("date", as_index=False)["kg"].mean() if len(df) else df
+
+
+def fetch_daily_calories(client, start: date, end: date) -> pd.DataFrame:
+    """Total, active and resting (BMR) kcal per day, as Garmin estimates them."""
+    rows = []
+    cur = start
+    while cur <= end:
+        nxt = min(cur + timedelta(days=89), end)
+        for r in client.get_calories_daily(cur.isoformat(), nxt.isoformat()) or []:
+            rows.append({"date": pd.to_datetime(r["calendarDate"]), "active": r.get("active"), "resting": r.get("resting"), "total": r.get("total")})
+        cur = nxt + timedelta(days=1)
+    return pd.DataFrame(rows, columns=["date", "active", "resting", "total"])
 
 
 def demo_data(start: date, end: date):
@@ -77,6 +90,7 @@ def demo_data(start: date, end: date):
                     "minutes": max(mins, 20),
                     "km": max(mins, 20) / pace if run else 0,
                     "vo2max": round(rng.normal(52 if d.year == 2024 else 49, 0.6)) if run else None,
+                    "kcal": round(max(mins, 20) * (11 if run else 7)),
                 }
             )
     a = pd.DataFrame(acts)
