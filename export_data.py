@@ -39,6 +39,12 @@ def main():
                                        kg=lambda d: d.kg.round(2)).to_csv(OUT / "weights.csv", index=False)
     if daily is not None and len(daily):
         daily.sort_values("date").assign(date=lambda d: d.date.dt.strftime("%Y-%m-%d")).to_csv(OUT / "daily_calories.csv", index=False)
+    if token:
+        try:
+            import export_health
+            export_health.run(client, acts)
+        except Exception as err:  # noqa: BLE001
+            print("Health data skipped:", err)
     (OUT / "last_updated.txt").write_text(f"{today.isoformat()}\n")
     print(f"Saved {len(acts)} activities and {len(weights)} weigh-ins to data/.")
 
