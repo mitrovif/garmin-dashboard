@@ -40,9 +40,18 @@ def fetch_activities(client, start: date, end: date) -> pd.DataFrame:
                     "km": (act.get("distance") or 0) / 1000,
                     "vo2max": act.get("vO2MaxValue"),
                     "kcal": act.get("calories"),
+                    "avg_hr": act.get("averageHR"),
+                    "max_hr": act.get("maxHR"),
+                    "aerobic_te": act.get("aerobicTrainingEffect"),
+                    "anaerobic_te": act.get("anaerobicTrainingEffect"),
+                    "load": act.get("activityTrainingLoad"),
+                    **{f"z{z}_min": (act.get(f"hrTimeInZone_{z}") or 0) / 60 for z in range(1, 6)},
+                    "activity_id": act.get("activityId"),
                 }
             )
-    df = pd.DataFrame(rows, columns=["date", "type", "minutes", "km", "vo2max", "kcal"])
+    cols = ["date", "type", "minutes", "km", "vo2max", "kcal", "avg_hr", "max_hr", "aerobic_te", "anaerobic_te", "load",
+            "z1_min", "z2_min", "z3_min", "z4_min", "z5_min", "activity_id"]
+    df = pd.DataFrame(rows, columns=cols)
     df["is_run"] = df["type"].isin(RUN_TYPES)
     return df
 
