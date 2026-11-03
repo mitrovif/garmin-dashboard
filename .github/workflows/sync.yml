@@ -13,10 +13,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install garminconnect pandas numpy
+      - name: Restore the latest Garmin login
+        uses: actions/cache/restore@v4
+        with:
+          path: .garmin
+          key: garmin-token-${{ github.run_id }}
+          restore-keys: garmin-token-
+      - run: pip install garminconnect pandas numpy cryptography
       - run: python export_data.py
         env:
           GARMIN_TOKEN: ${{ secrets.GARMIN_TOKEN }}
+      - name: Save the refreshed Garmin login for tomorrow
+        if: always() && hashFiles('.garmin/token.enc') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .garmin
+          key: garmin-token-${{ github.run_id }}
       - name: Commit updated data
         run: |
           git config user.name "garmin-sync"
