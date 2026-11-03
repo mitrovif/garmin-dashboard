@@ -14,11 +14,44 @@ START = date(2024, 1, 1)
 OUT = Path("data")
 
 
+def _key(secret):
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(("garmin-sync:" + secret).encode()).digest()))
+
+
+def _encrypt(text, secret):
+    return _key(secret).encrypt(text.encode())
+
+
+def _decrypt(blob, secret):
+    try:
+        return _key(secret).decrypt(blob).decode()
+    except Exception:  # noqa: BLE001  (secret was replaced: fall back to it)
+        return None
+
+
 def main():
     today = date.today()
-    token = os.environ.get("GARMIN_TOKEN")
+    secret = os.environ.get("GARMIN_TOKEN")
+    cache = Path(".garmin/token.enc")
+    token, client = None, None
+    saved = _decrypt(cache.read_bytes(), secret) if cache.exists() and secret else None
+    for candidate in [c for c in (saved, secret) if c]:
+        try:
+            client = gd.get_client(candidate)
+            token = candidate
+            break
+        except Exception as err:  # noqa: BLE001
+            print("Login with this token failed, trying the next one:", type(err).__name__)
+    if secret and client is None:
+        raise SystemExit("Garmin login failed: run setup_token.py again and update the GARMIN_TOKEN secret.")
+    if client is not None:
+        # Garmin rotates the login token when it refreshes: keep the fresh one (encrypted) for tomorrow
+        cache.parent.mkdir(exist_ok=True)
+        cache.write_bytes(_encrypt(client.client.dumps(), secret))
     if token:
-        client = gd.get_client(token)
         acts = gd.fetch_activities(client, START, today)
         weights = gd.fetch_weights(client, START, today)
         try:
@@ -45,6 +78,8 @@ def main():
             export_health.run(client, acts)
         except Exception as err:  # noqa: BLE001
             print("Health data skipped:", err)
+    if client is not None:
+        cache.write_bytes(_encrypt(client.client.dumps(), secret))
     (OUT / "last_updated.txt").write_text(f"{today.isoformat()}\n")
     print(f"Saved {len(acts)} activities and {len(weights)} weigh-ins to data/.")
 
